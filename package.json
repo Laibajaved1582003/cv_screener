@@ -2,7 +2,7 @@
   "name": "cv-screener",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build"
+    "build": "npm install && npm run build"
   },
   "dependencies": {
     "mammoth": "^1.6.0",
