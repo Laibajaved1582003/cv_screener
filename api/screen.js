@@ -1,13 +1,11 @@
 const pdfParse  = require("pdf-parse");
 const mammoth   = require("mammoth");
-const formidable = require("formidable");
 const fs        = require("fs");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
 
-// ── Extract text ──────────────────────────────────────────────────────────────
 async function extractText(filepath, filename) {
   const ext = (filename || "").toLowerCase();
   try {
@@ -27,7 +25,6 @@ async function extractText(filepath, filename) {
   }
 }
 
-// ── Retry wrapper ─────────────────────────────────────────────────────────────
 async function callWithRetry(fn, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -45,7 +42,6 @@ async function callWithRetry(fn, maxRetries = 3) {
   }
 }
 
-// ── Screen all CVs ────────────────────────────────────────────────────────────
 async function screenAll(jobDescription, candidates) {
   const blocks = candidates
     .map((c, i) => `--- CANDIDATE ${i + 1}: ${c.name} ---\n${c.text.slice(0, 2500)}\n`)
@@ -122,7 +118,6 @@ function extractSkills(jd) {
   return kw.filter(s => jd.toLowerCase().includes(s)).slice(0, 8);
 }
 
-// ── Main handler ──────────────────────────────────────────────────────────────
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -132,8 +127,8 @@ module.exports = async function handler(req, res) {
   if (req.method !== "POST")    return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    // Parse multipart form with formidable
-    const form = formidable({
+    const { IncomingForm } = require("formidable");
+    const form = new IncomingForm({
       maxFiles: 10,
       maxFileSize: 15 * 1024 * 1024,
       keepExtensions: true,
@@ -153,7 +148,6 @@ module.exports = async function handler(req, res) {
     if (!jobDescription || jobDescription.trim().length < 50)
       return res.status(400).json({ error: "Please provide a detailed job description (minimum 50 characters)" });
 
-    // Normalise files — formidable v3 returns arrays
     const rawFiles = files.cvs
       ? (Array.isArray(files.cvs) ? files.cvs : [files.cvs])
       : [];
@@ -161,7 +155,6 @@ module.exports = async function handler(req, res) {
     if (rawFiles.length === 0)
       return res.status(400).json({ error: "Please upload at least one CV" });
 
-    // Extract text from all files
     const candidates = await Promise.all(
       rawFiles.map(async file => {
         const filename = file.originalFilename || file.newFilename || "file";
@@ -178,7 +171,6 @@ module.exports = async function handler(req, res) {
         error: "Could not read text from any CV. Use text-based PDFs, Word (.docx), or .txt files.",
       });
 
-    // Screen
     const results = await screenAll(jobDescription, valid);
     results.sort((a, b) => b.score - a.score);
     results.forEach((r, i) => (r.rank = i + 1));
